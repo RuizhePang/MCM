@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from clustering import filter_conditions
+from clustering import country_filter
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
@@ -99,10 +100,10 @@ y = np.array(y)
 scaler = StandardScaler()
 X = scaler.fit_transform(X)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=2025)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=20)
 
 # 随机森林模型
-model = RandomForestRegressor(n_estimators=100, random_state=2025)
+model = RandomForestRegressor(n_estimators=100, random_state=20)
 
 # 训练模型
 model.fit(X_train, y_train)
@@ -115,27 +116,33 @@ mae = mean_absolute_error(y_test, y_pred)
 print(f"Test MSE: {mse}")
 print(f"Test MAE: {mae}")
 
-# 使用2024年的数据进行验证
+prediction_year = 2024
 accuracies = []
+weights = []  
 for country, group in choose_medal_data.groupby('NOC'):
-    #if country not in ['United States', 'China', 'Japan', 'France', 'Australia', 'Great Britain']:
-    #    continue
+    if country_filter(medal_data, country, prediction_year):
+        continue
+
     print('\n')
     input_medals = [medal_pivot.loc[country, years[-years_back + i]] for i in range(years_back)]
-    input_athletes = [athletes_pivot.loc[country, 2024]]
-    input_host = [host_pivot.loc[country, 2024]]
-    input_year = [np.float64(2024)]
-    input_events = [events_pivot.loc[country, 2024]]
+    input_athletes = [athletes_pivot.loc[country, prediction_year]]
+    input_host = [host_pivot.loc[country, prediction_year]]
+    input_year = [np.float64(prediction_year)]
+    input_events = [events_pivot.loc[country, prediction_year]]
     input_data = input_medals + input_athletes + input_host + input_year + input_events
 
     input_data = np.array(input_data).reshape(1, -1)
     input_data = scaler.transform(input_data)
 
     prediction = model.predict(input_data)[0]
-    actual = medal_pivot.loc[country, 2024]
+    actual = medal_pivot.loc[country, prediction_year]
 
     print(f"{country} - Actual 2024 total medal number: ", actual)
     print(f"{country} - Predicted 2024 total medal number: ", prediction)
+
+    # 计算权重，避免较小值波动对准确率的影响
+    weight = max(actual, 1)  # 确保权重不为 0
+    weights.append(weight)
 
     if actual == 0:
         if round(prediction) == 0:
@@ -145,7 +152,9 @@ for country, group in choose_medal_data.groupby('NOC'):
     else:
         accuracy = 1 - abs(actual - prediction) / actual
     print(f"{country} - Accuracy: {accuracy:.2%}")
-    accuracies.append(accuracy)
 
-average_accuracy = sum(accuracies) / len(accuracies)
-print(f"Average Accuracy: {average_accuracy:.2%}")
+    accuracies.append(accuracy * weight)
+
+total_weight = sum(weights)
+average_accuracy = sum(accuracies) / total_weight
+print(f"Weighted Average Accuracy: {average_accuracy:.2%}")

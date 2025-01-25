@@ -8,11 +8,19 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
+from clustering import filter_conditions
+from clustering import country_filter
 
 match_table = pd.read_csv('../data/match.csv')
 
 medal_data = pd.read_csv('../data/summerOly_medal_counts.csv')
 medal_data['NOC'] = medal_data['NOC'].str.strip()
+grouped = medal_data.groupby('NOC', group_keys=False)
+few_data_indices = grouped.apply(filter_conditions).explode().dropna().astype(int)
+few_medal_data = medal_data.loc[few_data_indices]
+abundant_medal_data = medal_data.drop(few_data_indices)
+
+choose_medal_data = abundant_medal_data
 
 athletes_data = pd.read_csv('../data/summerOly_athletes.csv')
 athletes_data = pd.merge(athletes_data, match_table, left_on='NOC', right_on='abbr', how='left')
@@ -55,16 +63,16 @@ events_pivot = merged_data.pivot(index='NOC', columns='Year', values='Events').f
 years = [1896, 1900, 1904, 1908, 1912, 1920, 1924, 1928, 1932, 1936, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020]
 years_back = 3
 
-for country in medal_pivot.index:
-    #if country not in ['Japan']:
-    if country not in ['Great Britain', 'United States','France', 'China', 'Japan', 'Australia']:
-        continue
-    #print(f"\nTraining Model - Country: {country}")
-    
-    X = []
-    y = []
+X = []
+y = []
+
+for country, group in choose_medal_data.groupby('NOC'):
+    #if country not in ['China']:
+    #    continue
 
     for i in range(len(years) - years_back):
+        if years[i + years_back] not in group['Year'].values:
+            continue
         medals = [medal_pivot.loc[country, years[i + j]] for j in range(years_back)]
         athletes = [athletes_pivot.loc[country, years[i + years_back]]]
         host = [host_pivot.loc[country, years[i + years_back]]]
@@ -90,36 +98,44 @@ y_pred = model.predict(X_test)
 mse = mean_squared_error(y_test, y_pred)
 print(f"MSE: {mse}")
 
+prediction_year = 2024
 accuracies = []
-for country in medal_pivot.index:
-    #if country not in ['China']:
-    if country not in ['Great Britain', 'United States','France', 'China', 'Japan', 'Australia']:
+weights = []  
+for country, group in choose_medal_data.groupby('NOC'):
+    if country_filter(medal_data, country, prediction_year):
         continue
+
     print('\n')
     input_medals = [medal_pivot.loc[country, years[-years_back + i]] for i in range(years_back)]
-    input_athletes = [athletes_pivot.loc[country, 2024]]
-    input_host = [host_pivot.loc[country, 2024]]
-    input_year = [np.float64(2024)]
-    input_events = [events_pivot.loc[country, 2024]]
+    input_athletes = [athletes_pivot.loc[country, prediction_year]]
+    input_host = [host_pivot.loc[country, prediction_year]]
+    input_year = [np.float64(prediction_year)]
+    input_events = [events_pivot.loc[country, prediction_year]]
     input_data = input_medals + input_athletes + input_host + input_year + input_events
-    input_df = pd.DataFrame([input_data], columns=[f'Medal_{i+1}' for i in range(years_back)] + ['Athletes'] + ['Host'] + ['Year'] + ['Events'])
-    
-    prediction = model.predict(input_df)[0]
-    actual = medal_pivot.loc[country, 2024]
 
-    print(f"{country} - Actual 2024 total medal number: ",medal_pivot.loc[country, 2024])
-    print(f"{country} - Predicted 2024 total medal number: ",prediction)
-    
-    prediction = round(prediction)
+    input_data = np.array(input_data).reshape(1, -1)
+
+    prediction = model.predict(input_data)[0]
+    actual = medal_pivot.loc[country, prediction_year]
+
+    print(f"{country} - Actual 2024 total medal number: ", actual)
+    print(f"{country} - Predicted 2024 total medal number: ", prediction)
+
+    # 计算权重，避免较小值波动对准确率的影响
+    weight = max(actual, 1)  # 确保权重不为 0
+    weights.append(weight)
+
     if actual == 0:
-        if prediction == 0:
+        if round(prediction) == 0:
             accuracy = 1
         else:
-            accuracy = 0 
+            accuracy = 0
     else:
-        accuracy = 1 - abs(actual - prediction) / actual  # 计算准确率
-    accuracies.append(accuracy)  # 将准确率添加到列表中
+        accuracy = 1 - abs(actual - prediction) / actual
     print(f"{country} - Accuracy: {accuracy:.2%}")
 
-average_accuracy = sum(accuracies) / len(accuracies)
-print(f"\nAverage Accuracy: {average_accuracy:.2%}")
+    accuracies.append(accuracy * weight)
+
+total_weight = sum(weights)
+average_accuracy = sum(accuracies) / total_weight
+print(f"Weighted Average Accuracy: {average_accuracy:.2%}")

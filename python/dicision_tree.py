@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
@@ -96,8 +96,8 @@ X = scaler.fit_transform(X)
 # 数据集划分
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=2025)
 
-# 使用支持向量机模型
-model = SVR(kernel='rbf', C=100, gamma=0.1, epsilon=0.1)
+# 使用决策树回归模型
+model = DecisionTreeRegressor(max_depth=10, random_state=2025)
 
 # 训练模型
 model.fit(X_train, y_train)

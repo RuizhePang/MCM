@@ -16,7 +16,7 @@ few_data_indices = grouped.apply(filter_conditions).explode().dropna().astype(in
 few_medal_data = medal_data.loc[few_data_indices]
 abundant_medal_data = medal_data.drop(few_data_indices)
 
-choose_medal_data = few_medal_data
+choose_medal_data = abundant_medal_data
 
 athletes_data = pd.read_csv('../data/summerOly_athletes.csv')
 athletes_data = pd.merge(athletes_data, match_table, left_on='NOC', right_on='abbr', how='left')

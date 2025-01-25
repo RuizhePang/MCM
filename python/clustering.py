@@ -16,6 +16,7 @@ athletes_data['Year'] = pd.to_numeric(athletes_data['Year'], errors='coerce')
 # 按国家和年份排序
 medal_data_sorted = medal_data.sort_values(by=['NOC', 'Year'], ascending=[True, False])
 # athletes_data_sorted = athletes_data.sort_values(by=['NOC', 'Year'], ascending=[True, False])
+years = [1896, 1900, 1904, 1908, 1912, 1920, 1924, 1928, 1932, 1936, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020]
 
 # 定义筛选条件函数
 def filter_conditions(group):
@@ -23,34 +24,59 @@ def filter_conditions(group):
     for idx, row in group.iterrows():
         current_year = row['Year']
         # 获取当前年份之前的记录（按年份降序）
-        past_games = group[group['Year'] < current_year].sort_values(by='Year', ascending=False)
+        past_years = [year for year in years if year <= current_year]
+        if len(past_years) >= 3:
+            recent_3_years = past_years[-3:]
+            recent_3_games = group[group['Year'].isin(recent_3_years)].sort_values(by='Year', ascending=False)
+            condition1 = len(recent_3_games) < 3 
+            condition2 = all(recent_3_games['Total'] < 3)
+        else:
+            condition1 = True
+            condition2 = True
+
+        #past_games = group[group['Year'] < current_year].sort_values(by='Year', ascending=False)
         # 取最近三次奥运会记录
-        recent_3_games = past_games.head(3)
+        #recent_3_games = past_games.head(3)
         # print(recent_3_games)
         # print("\n" )
         
         # 条件1：最近三次参赛次数 < 3
-        condition1 = len(recent_3_games) < 3
-        
+        #condition1 = len(recent_3_games) < 3
         # 条件2：最近三次每次奖牌数 < 3
-        if not recent_3_games.empty:
-            condition2 = all(recent_3_games['Total'] < 3)
-        else:
-            condition2 = False
+        #if not recent_3_games.empty:
+        #    condition2 = all(recent_3_games['Total'] < 3)
+        #else:
+        #    condition2 = False
         
         # 满足任一条件则标记为few_data
         if condition1 or condition2:
             few_data_indices.append(idx)
     return few_data_indices
 
+def country_filter(data, country, year):
+    current_year = year
+    past_years = [year for year in years if year <= current_year]
+    group = data[data['NOC'] == country]
+    if len(past_years) >= 3:
+        recent_3_years = past_years[-3:]
+        recent_3_games = group[group['Year'].isin(recent_3_years)].sort_values(by='Year', ascending=False)
+        condition1 = len(recent_3_games) < 3
+        condition2 = all(recent_3_games['Total'] < 3)
+    else:
+        condition1 = True
+        condition2 = True
+
+    return condition1 or condition2
+
 # 按国家分组应用筛选条件
+#print(medal_data_sorted)
 grouped = medal_data_sorted.groupby('NOC', group_keys=False)
+#print(grouped)
 few_data_indices = grouped.apply(filter_conditions).explode().dropna().astype(int)
 #print(few_data_indices)
 
 # 分割数据
 few_medal = medal_data_sorted.loc[few_data_indices]
-#print(few_medal)
 #print(few_medal)
 abundant_medal = medal_data_sorted.drop(few_data_indices)
 
