@@ -1,18 +1,36 @@
 import pandas as pd
 import numpy as np
+from sklearn.svm import SVR
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from clustering import filter_conditions
 from clustering import country_filter
+import argparse
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
 pd.set_option('display.colheader_justify', 'left')
 
-# 数据处理
+parser = argparse.ArgumentParser(description="Agruments")
+
+parser.add_argument('--use_abundant', type=int, default=1, help="use abundant_medal_data or few_medal_data")
+parser.add_argument('--years_back', type=int, default=3, help="years to call back")
+parser.add_argument('--prediction_year', type=int, default=2024, help="prediction year")
+parser.add_argument('--model_type', type=str, default='SVM', help="which model to use")
+
+args = parser.parse_args()
+
+use_abundant = args.use_abundant
+years_back = args.years_back
+prediction_year = args.prediction_year
+model_type = args.model_type
+
+# Data Processing 
 match_table = pd.read_csv('../data/match.csv')
 
 medal_data = pd.read_csv('../data/summerOly_medal_counts.csv')
@@ -22,7 +40,7 @@ few_data_indices = grouped.apply(filter_conditions).explode().dropna().astype(in
 few_medal_data = medal_data.loc[few_data_indices]
 abundant_medal_data = medal_data.drop(few_data_indices)
 
-choose_medal_data = abundant_medal_data
+choose_medal_data = abundant_medal_data if use_abundant else few_medal_data
 
 athletes_data = pd.read_csv('../data/summerOly_athletes.csv')
 athletes_data = pd.merge(athletes_data, match_table, left_on='NOC', right_on='abbr', how='left')
@@ -67,7 +85,8 @@ for col in events_pivot.columns:
         events_pivot[col] = events_pivot[col].replace(0, fill_value).fillna(fill_value)
 
 years = [1896, 1900, 1904, 1908, 1912, 1920, 1924, 1928, 1932, 1936, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020]
-years_back = 3
+if prediction_year == 2028:
+    years.append(2024)
 
 X = []
 y = []
@@ -89,20 +108,27 @@ for country, group in choose_medal_data.groupby('NOC'):
 X = np.array(X)
 y = np.array(y)
 
-# 数据标准化
+# Normalization
 scaler = StandardScaler()
 X = scaler.fit_transform(X)
 
-# 数据集划分
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=2025)
 
-# 使用决策树回归模型
-model = DecisionTreeRegressor(max_depth=10, random_state=2025)
-
-# 训练模型
+# Model Defination
+if model_type == 'SVM':
+    model = SVR(kernel='rbf', C=100, gamma=0.1, epsilon=0.1)
+elif model_type == 'RandomForest':
+    model = RandomForestRegressor(n_estimators=100, random_state=2025)
+elif model_type == 'DicisionTree':
+    model = DecisionTreeRegressor(max_depth=10, random_state=2025)
+elif model_type == 'LinearRegression':
+    model = LinearRegression()
+else:
+    raise
+    
 model.fit(X_train, y_train)
 
-# 评估模型
+# Validation
 y_pred = model.predict(X_test)
 mse = mean_squared_error(y_test, y_pred)
 mae = mean_absolute_error(y_test, y_pred)
@@ -110,11 +136,10 @@ mae = mean_absolute_error(y_test, y_pred)
 print(f"Test MSE: {mse}")
 print(f"Test MAE: {mae}")
 
-prediction_year = 2024
 accuracies = []
 weights = []  
 for country, group in choose_medal_data.groupby('NOC'):
-    if country_filter(medal_data, country, prediction_year):
+    if not (use_abundant ^ country_filter(medal_data, country, prediction_year)):
         continue
 
     print('\n')
@@ -134,8 +159,7 @@ for country, group in choose_medal_data.groupby('NOC'):
     print(f"{country} - Actual 2024 total medal number: ", actual)
     print(f"{country} - Predicted 2024 total medal number: ", prediction)
 
-    # 计算权重，避免较小值波动对准确率的影响
-    weight = max(actual, 1)  # 确保权重不为 0
+    weight = max(actual, 1)
     weights.append(weight)
 
     if actual == 0:
