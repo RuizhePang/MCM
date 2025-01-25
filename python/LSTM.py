@@ -51,10 +51,10 @@ events_pivot = merged_data.pivot(index='NOC', columns='Year', values='Events').f
 years = [1896, 1900, 1904, 1908, 1912, 1920, 1924, 1928, 1932, 1936, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020]
 years_back = 3
 
+# Training Data
 for country in medal_pivot.index:
     if country not in ['United States', 'China', 'Great Britain', 'France','Japan', 'Australia']:
         continue
-    print(f"\nTraining Model - Country: {country}")
     
     X = []
     y = []
@@ -76,6 +76,7 @@ for country in medal_pivot.index:
 X = np.array(X)
 y = np.array(y)
 
+# Normalization
 from sklearn.preprocessing import MinMaxScaler
 scaler = MinMaxScaler()
 X = scaler.fit_transform(X)
@@ -83,6 +84,7 @@ X = scaler.fit_transform(X)
 from sklearn.model_selection import train_test_split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=2025)
 
+# Model Defination
 model = Sequential([
     LSTM(64, activation='relu', return_sequences=True, input_shape=(X_train.shape[1], 1)),
     Dropout(0.2),
@@ -94,7 +96,7 @@ model = Sequential([
 optimizer = Adam(learning_rate=0.01)
 model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mae'])
 
-early_stopping = EarlyStopping(monitor='val_loss', patience=1000, restore_best_weights=True)
+early_stopping = EarlyStopping(monitor='val_loss', patience=500, restore_best_weights=True)
 lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=500)
 
 X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
@@ -102,7 +104,7 @@ X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
 history = model.fit(
     X_train, y_train,
     validation_split=0.2,
-    epochs=2000,
+    epochs=3000,
     batch_size=32,
     callbacks=[early_stopping, lr_scheduler],
     verbose=1
@@ -111,6 +113,7 @@ history = model.fit(
 loss, mae = model.evaluate(X_test, y_test)
 print(f"Test Loss: {loss}, Test MAE: {mae}")
 
+# Validation by Using the Data of 2024
 accuracies = []
 for country in medal_pivot.index:
     if country not in ['Great Britain', 'United States','France', 'China', 'Japan', 'Australia']:
