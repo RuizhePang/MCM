@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import numpy as np
 from sklearn.svm import SVR
@@ -7,9 +8,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-from clustering import filter_conditions
-from clustering import country_filter
-import argparse
+from data_util import filter_conditions
+from data_util import country_filter
+from data_util import *
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
@@ -22,6 +23,7 @@ parser.add_argument('--use_abundant', type=int, default=1, help="use abundant_me
 parser.add_argument('--years_back', type=int, default=3, help="years to call back")
 parser.add_argument('--prediction_year', type=int, default=2024, help="prediction year")
 parser.add_argument('--model_type', type=str, default='SVM', help="which model to use")
+parser.add_argument('--medal_type', type=str, default='Total', help="which medal to predict")
 
 args = parser.parse_args()
 
@@ -29,6 +31,7 @@ use_abundant = args.use_abundant
 years_back = args.years_back
 prediction_year = args.prediction_year
 model_type = args.model_type
+medal_type = args.medal_type
 
 # Data Processing 
 match_table = pd.read_csv('../data/match.csv')
@@ -70,11 +73,11 @@ events_data = events_data.drop(index=3).reset_index(drop=True)
 events_data['Year'] = events_data['Year'].astype(int)
 
 merged_data = pd.merge(medal_data, athletes_data, on=['NOC', 'Year'], how='left')
-merged_data = pd.merge(merged_data, host_data, on='Year', how='left')
+merged_data = pd.merge(merged_data, host_data, on='Year', how='outer')
 merged_data['Is_Host'] = (merged_data['Country'] == merged_data['NOC']).astype(int)
 merged_data = pd.merge(merged_data, events_data, on='Year', how='left')
 
-medal_pivot = merged_data.pivot(index='NOC', columns='Year', values='Total').fillna(0)
+medal_pivot = merged_data.pivot(index='NOC', columns='Year', values=medal_type).fillna(0)
 athletes_pivot = merged_data.pivot(index='NOC', columns='Year', values='Athletes').fillna(0)
 host_pivot = merged_data.pivot(index='NOC', columns='Year', values='Is_Host').fillna(0)
 events_pivot = merged_data.pivot(index='NOC', columns='Year', values='Events')
@@ -144,35 +147,47 @@ for country, group in choose_medal_data.groupby('NOC'):
 
     print('\n')
     input_medals = [medal_pivot.loc[country, years[-years_back + i]] for i in range(years_back)]
-    input_athletes = [athletes_pivot.loc[country, prediction_year]]
     input_host = [host_pivot.loc[country, prediction_year]]
     input_year = [np.float64(prediction_year)]
-    input_events = [events_pivot.loc[country, prediction_year]]
+    if prediction_year == 2028:
+        input_events = [predict_2028_events_num(events_data)]
+        input_athletes = [predict_2028_athletes_num(athletes_data, country)]
+    else:
+        input_events = [events_pivot.loc[country, prediction_year]]
+        input_athletes = [athletes_pivot.loc[country, prediction_year]]
     input_data = input_medals + input_athletes + input_host + input_year + input_events
 
     input_data = np.array(input_data).reshape(1, -1)
     input_data = scaler.transform(input_data)
 
     prediction = model.predict(input_data)[0]
-    actual = medal_pivot.loc[country, prediction_year]
+    prediction = round(prediction)
 
-    print(f"{country} - Actual 2024 total medal number: ", actual)
-    print(f"{country} - Predicted 2024 total medal number: ", prediction)
+    if prediction_year == 2028:
+        actual_2024 = medal_pivot.loc[country, 2024]
+        print(f"{country} - Actual 2024 {medal_type} medal number: ", actual_2024)
+        print(f"{country} - Predicted 2028 {medal_type} medal number: ", prediction)
+    else:    
+        actual = medal_pivot.loc[country, prediction_year]
+        print(f"{country} - Actual 2024 {medal_type} medal number: ", actual)
+        print(f"{country} - Predicted 2024 {medal_type} medal number: ", prediction)
 
-    weight = max(actual, 1)
-    weights.append(weight)
+        weight = max(actual, 1)
+        weights.append(weight)
 
-    if actual == 0:
-        if round(prediction) == 0:
-            accuracy = 1
+
+        if actual == 0:
+            if round(prediction) == 0:
+                accuracy = 1
+            else:
+                accuracy = 0
         else:
-            accuracy = 0
-    else:
-        accuracy = 1 - abs(actual - prediction) / actual
-    print(f"{country} - Accuracy: {accuracy:.2%}")
+            accuracy = 1 - abs(actual - prediction) / actual
+        print(f"{country} - Accuracy: {accuracy:.2%}")
 
-    accuracies.append(accuracy * weight)
+        accuracies.append(accuracy * weight)
 
-total_weight = sum(weights)
-average_accuracy = sum(accuracies) / total_weight
-print(f"Weighted Average Accuracy: {average_accuracy:.2%}")
+if prediction_year != 2028:
+    total_weight = sum(weights)
+    average_accuracy = sum(accuracies) / total_weight
+    print(f"Weighted Average Accuracy: {average_accuracy:.2%}")
