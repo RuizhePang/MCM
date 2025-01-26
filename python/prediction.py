@@ -22,6 +22,7 @@ parser.add_argument('--years_back', type=int, default=3, help="years to call bac
 parser.add_argument('--prediction_year', type=int, default=2024, help="prediction year")
 parser.add_argument('--model_type', type=str, default='SVM', help="which model to use")
 parser.add_argument('--medal_type', type=str, default='Total', help="which medal to predict")
+parser.add_argument('--save', type=int, default=0, help="if save the result")
 
 args = parser.parse_args()
 
@@ -30,6 +31,7 @@ years_back = args.years_back
 prediction_year = args.prediction_year
 model_type = args.model_type
 medal_type = args.medal_type
+save = args.save
 
 # Data Processing 
 match_table = pd.read_csv('../data/match.csv')
@@ -137,24 +139,26 @@ mae = mean_absolute_error(y_test, y_pred)
 #print(f"Test MSE: {mse}")
 #print(f"Test MAE: {mae}")
 
-accuracies = []
-weights = []  
+errors = []
 choose_medal_data['prediction_result'] = None
 for country, group in choose_medal_data.groupby('NOC'):
     if country_filter(medal_data, athletes_data, country, prediction_year) == 2:
-        #print('\n')
-        #print(f"{country} - may not attend the 2028 Olympic")
+        if not save:
+            print('\n')
+            print(f"{country} - may not attend the 2028 Olympic")
         choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = 'ABSENT'
         continue
     elif country_filter(medal_data, athletes_data, country, prediction_year) == 3:
-        #print('\n')
-        #print(f"{country} - special case")
+        if not save:
+            print('\n')
+            print(f"{country} - special case")
         choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = None
         continue
     elif not (use_abundant ^ country_filter(medal_data, athletes_data, country, prediction_year)):
         continue
 
-    #print('\n')
+    if not save:
+        print('\n')
     input_medals = [medal_pivot.loc[country, years[-years_back + i]] for i in range(years_back)]
     input_host = [host_pivot.loc[country, prediction_year]]
     input_year = [np.float64(prediction_year)]
@@ -176,32 +180,21 @@ for country, group in choose_medal_data.groupby('NOC'):
 
     if prediction_year == 2028:
         actual_2024 = medal_pivot.loc[country, 2024]
-        #print(f"{country} - Actual 2024 {medal_type} medal number: ", actual_2024)
-        #print(f"{country} - Predicted 2028 {medal_type} medal number: ", prediction)
+        if not save:
+            print(f"{country} - Actual 2024 {medal_type} medal number: ", actual_2024)
+            print(f"{country} - Predicted 2028 {medal_type} medal number: ", prediction)
     else:    
         actual = medal_pivot.loc[country, prediction_year]
         print(f"{country} - Actual 2024 {medal_type} medal number: ", actual)
         print(f"{country} - Predicted 2024 {medal_type} medal number: ", prediction)
 
-        weight = max(actual, 1)
-        weights.append(weight)
-
-        if actual == 0:
-            if round(prediction) == 0:
-                accuracy = 1
-            else:
-                accuracy = 0
-        else:
-            accuracy = 1 - abs(actual - prediction) / actual
-        print(f"{country} - Accuracy: {accuracy:.2%}")
-
-        accuracies.append(accuracy * weight)
+        error = (prediction - actual) ** 2
+        errors.append(error)
 
 if prediction_year != 2028:
-    total_weight = sum(weights)
-    average_accuracy = sum(accuracies) / total_weight
-    print(f"Weighted Average Accuracy: {average_accuracy:.2%}")
-else:
+    mse = sum(errors) / len(errors)
+    print(f'MSE: {mse}')
+elif save:
     import openpyxl
     import os
 

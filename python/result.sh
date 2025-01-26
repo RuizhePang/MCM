@@ -3,6 +3,7 @@
 years_back=5
 prediction_year=2028
 medal_type="Total"
+save=1
 
 use_abundant_values=(0 1)
 model_types=("SVM" "RandomForest" "DecisionTree" "LinearRegression")
@@ -15,7 +16,8 @@ for use_abundant in "${use_abundant_values[@]}"; do
       --years_back $years_back \
       --prediction_year $prediction_year \
       --model_type $model_type \
-      --medal_type $medal_type
+      --medal_type $medal_type \
+      --save $save
   done
 done
 
