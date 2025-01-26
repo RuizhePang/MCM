@@ -1,4 +1,4 @@
-use_abundant=1
+use_abundant=0
 years_back=5
 prediction_year=2028
 
@@ -7,10 +7,10 @@ medal_type='Total'
 #medal_type='Silver'
 #medal_type='Bronze'
 
-#model_type='SVM'
+model_type='SVM'
 #model_type='RandomForest'
-#model_type='DicisionTree'
-model_type='LinearRegression'
+#model_type='DecisionTree'
+#model_type='LinearRegression'
 
 python prediction.py \
     --use_abundant $use_abundant \

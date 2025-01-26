@@ -120,7 +120,7 @@ if model_type == 'SVM':
     model = SVR(kernel='rbf', C=100, gamma=0.1, epsilon=0.1)
 elif model_type == 'RandomForest':
     model = RandomForestRegressor(n_estimators=100, random_state=2025)
-elif model_type == 'DicisionTree':
+elif model_type == 'DecisionTree':
     model = DecisionTreeRegressor(max_depth=10, random_state=2025)
 elif model_type == 'LinearRegression':
     model = LinearRegression()
@@ -134,27 +134,27 @@ y_pred = model.predict(X_test)
 mse = mean_squared_error(y_test, y_pred)
 mae = mean_absolute_error(y_test, y_pred)
 
-print(f"Test MSE: {mse}")
-print(f"Test MAE: {mae}")
+#print(f"Test MSE: {mse}")
+#print(f"Test MAE: {mae}")
 
 accuracies = []
 weights = []  
 choose_medal_data['prediction_result'] = None
 for country, group in choose_medal_data.groupby('NOC'):
     if country_filter(medal_data, athletes_data, country, prediction_year) == 2:
-        print('\n')
-        print(f"{country} - may not attend the 2028 Olympic")
+        #print('\n')
+        #print(f"{country} - may not attend the 2028 Olympic")
         choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = 'ABSENT'
         continue
     elif country_filter(medal_data, athletes_data, country, prediction_year) == 3:
-        print('\n')
-        print(f"{country} - special case")
+        #print('\n')
+        #print(f"{country} - special case")
         choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = None
         continue
     elif not (use_abundant ^ country_filter(medal_data, athletes_data, country, prediction_year)):
         continue
 
-    print('\n')
+    #print('\n')
     input_medals = [medal_pivot.loc[country, years[-years_back + i]] for i in range(years_back)]
     input_host = [host_pivot.loc[country, prediction_year]]
     input_year = [np.float64(prediction_year)]
@@ -170,14 +170,14 @@ for country, group in choose_medal_data.groupby('NOC'):
     input_data = scaler.transform(input_data)
 
     prediction = model.predict(input_data)[0]
-    prediction = round(prediction)
+    #prediction = round(prediction)
 
     choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = prediction
 
     if prediction_year == 2028:
         actual_2024 = medal_pivot.loc[country, 2024]
-        print(f"{country} - Actual 2024 {medal_type} medal number: ", actual_2024)
-        print(f"{country} - Predicted 2028 {medal_type} medal number: ", prediction)
+        #print(f"{country} - Actual 2024 {medal_type} medal number: ", actual_2024)
+        #print(f"{country} - Predicted 2028 {medal_type} medal number: ", prediction)
     else:    
         actual = medal_pivot.loc[country, prediction_year]
         print(f"{country} - Actual 2024 {medal_type} medal number: ", actual)

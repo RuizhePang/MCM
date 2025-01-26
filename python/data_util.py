@@ -37,6 +37,11 @@ def country_filter(medal_data, athletes_data, country, year):
         recent_3_attendances = athletes_data[athletes_data['NOC'] == country]
         recent_3_attendances = recent_3_attendances[recent_3_attendances['Year'].isin(recent_3_years)]
         
+        #if country == 'Ceylon':
+        #    print(recent_3_attendances)
+        #    print(recent_3_games)
+        #    raise
+        
         # the country did not attend the recent 3 games
         if len(recent_3_attendances) == 0:
             return 2
