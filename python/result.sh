@@ -21,4 +21,4 @@ for use_abundant in "${use_abundant_values[@]}"; do
   done
 done
 
-python cal_avg.py --years_back $years_back --medal_type $medal_type
+#python cal_avg.py --years_back $years_back --medal_type $medal_type

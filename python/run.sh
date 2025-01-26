@@ -2,6 +2,7 @@ use_abundant=1
 years_back=5
 prediction_year=2024
 save=0
+random_seed=3
 
 medal_type='Total'
 #medal_type='Gold'
@@ -19,4 +20,5 @@ python prediction.py \
     --prediction_year $prediction_year \
     --model_type $model_type \
     --medal_type $medal_type \
-    --save $save
+    --save $save \
+    --random_seed $random_seed

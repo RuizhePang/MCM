@@ -8,6 +8,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.metrics import r2_score
 from data_util import *
 
 pd.set_option('display.max_rows', None)
@@ -23,6 +24,7 @@ parser.add_argument('--prediction_year', type=int, default=2024, help="predictio
 parser.add_argument('--model_type', type=str, default='SVM', help="which model to use")
 parser.add_argument('--medal_type', type=str, default='Total', help="which medal to predict")
 parser.add_argument('--save', type=int, default=0, help="if save the result")
+parser.add_argument('--random_seed', type=int, default=2025, help="random seed")
 
 args = parser.parse_args()
 
@@ -32,6 +34,7 @@ prediction_year = args.prediction_year
 model_type = args.model_type
 medal_type = args.medal_type
 save = args.save
+random_seed = args.random_seed
 
 # Data Processing 
 match_table = pd.read_csv('../data/match.csv')
@@ -115,15 +118,15 @@ y = np.array(y)
 scaler = StandardScaler()
 X = scaler.fit_transform(X)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=2025)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed)
 
 # Model Defination
 if model_type == 'SVM':
     model = SVR(kernel='rbf', C=100, gamma=0.1, epsilon=0.1)
 elif model_type == 'RandomForest':
-    model = RandomForestRegressor(n_estimators=100, random_state=2025)
+    model = RandomForestRegressor(n_estimators=100, random_state=random_seed)
 elif model_type == 'DecisionTree':
-    model = DecisionTreeRegressor(max_depth=10, random_state=2025)
+    model = DecisionTreeRegressor(max_depth=10, random_state=random_seed)
 elif model_type == 'LinearRegression':
     model = LinearRegression()
 else:
@@ -135,6 +138,7 @@ model.fit(X_train, y_train)
 y_pred = model.predict(X_test)
 mse = mean_squared_error(y_test, y_pred)
 mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
 
 #print(f"Test MSE: {mse}")
 #print(f"Test MAE: {mae}")
@@ -188,12 +192,13 @@ for country, group in choose_medal_data.groupby('NOC'):
         print(f"{country} - Actual 2024 {medal_type} medal number: ", actual)
         print(f"{country} - Predicted 2024 {medal_type} medal number: ", prediction)
 
-        error = (prediction - actual) ** 2
+        error = (actual - prediction) ** 2
         errors.append(error)
 
 if prediction_year != 2028:
-    mse = sum(errors) / len(errors)
     print(f'MSE: {mse}')
+    print(f'MAE: {mae}')
+    print(f'R^2: {r2}')
 elif save:
     import openpyxl
     import os
