@@ -8,8 +8,6 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-from data_util import filter_conditions
-from data_util import country_filter
 from data_util import *
 
 pd.set_option('display.max_rows', None)
@@ -141,8 +139,19 @@ print(f"Test MAE: {mae}")
 
 accuracies = []
 weights = []  
+choose_medal_data['prediction_result'] = None
 for country, group in choose_medal_data.groupby('NOC'):
-    if not (use_abundant ^ country_filter(medal_data, country, prediction_year)):
+    if country_filter(medal_data, athletes_data, country, prediction_year) == 2:
+        print('\n')
+        print(f"{country} - may not attend the 2028 Olympic")
+        choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = 'ABSENT'
+        continue
+    elif country_filter(medal_data, athletes_data, country, prediction_year) == 3:
+        print('\n')
+        print(f"{country} - special case")
+        choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = None
+        continue
+    elif not (use_abundant ^ country_filter(medal_data, athletes_data, country, prediction_year)):
         continue
 
     print('\n')
@@ -163,6 +172,8 @@ for country, group in choose_medal_data.groupby('NOC'):
     prediction = model.predict(input_data)[0]
     prediction = round(prediction)
 
+    choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = prediction
+
     if prediction_year == 2028:
         actual_2024 = medal_pivot.loc[country, 2024]
         print(f"{country} - Actual 2024 {medal_type} medal number: ", actual_2024)
@@ -174,7 +185,6 @@ for country, group in choose_medal_data.groupby('NOC'):
 
         weight = max(actual, 1)
         weights.append(weight)
-
 
         if actual == 0:
             if round(prediction) == 0:
@@ -191,3 +201,42 @@ if prediction_year != 2028:
     total_weight = sum(weights)
     average_accuracy = sum(accuracies) / total_weight
     print(f"Weighted Average Accuracy: {average_accuracy:.2%}")
+else:
+    import openpyxl
+    import os
+
+    excel_file = f"../result/result_{medal_type}_back{years_back}.xlsx"
+    if not os.path.exists(excel_file):
+        df = pd.DataFrame()
+        df.to_excel(excel_file, index=False)
+        medal_pivot_reset = medal_pivot.reset_index()
+        noc_column = medal_pivot_reset[['NOC']]
+        noc_column.to_excel(excel_file, index=False)
+
+    choose_medal_data_unique = choose_medal_data.drop_duplicates(subset=['NOC'])
+
+    wb = openpyxl.load_workbook(excel_file)
+    ws = wb.active
+
+    existing_columns = [ws.cell(row=1, column=col).value for col in range(1, ws.max_column + 1)]
+
+    target_column_name = f'{model_type}'
+    if target_column_name not in existing_columns:
+        predicted_column_index = ws.max_column + 1
+        ws.cell(row=1, column=predicted_column_index, value=target_column_name)
+    else:
+        predicted_column_index = existing_columns.index(target_column_name) + 1
+
+    excel_nocs = [ws.cell(row=row, column=1).value for row in range(2, ws.max_row + 1)]
+
+    for country in choose_medal_data_unique['NOC']:
+        if country in excel_nocs:
+            excel_row = excel_nocs.index(country) + 2
+            prediction = choose_medal_data_unique.loc[choose_medal_data_unique['NOC'] == country, 'prediction_result'].values[0]
+
+            target_cell = ws.cell(row=excel_row, column=predicted_column_index)
+
+            if target_cell.value is None:
+                target_cell.value = prediction
+
+    wb.save(excel_file)
