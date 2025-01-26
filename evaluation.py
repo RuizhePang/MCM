@@ -218,4 +218,4 @@ if __name__ == "__main__":
     medal_prediction = predict_nation_medals(few_medal_df[['NOC', 'Year']], medal_winners)
     print("\n国家年度奖牌预测（基于模型分配结果）:")
     print(medal_prediction)
-    medal_prediction.to_csv('nation_medal_predictions.csv', index=False)
+    medal_prediction.to_csv('predictions_few_data.csv', index=False)
