@@ -2,7 +2,7 @@ use_abundant=1
 years_back=5
 prediction_year=2024
 save=0
-random_seed=3
+random_seed=2025
 
 medal_type='Total'
 #medal_type='Gold'
@@ -12,7 +12,12 @@ medal_type='Total'
 #model_type='SVM'
 #model_type='RandomForest'
 #model_type='DecisionTree'
-model_type='LinearRegression'
+#model_type='LinearRegression'
+#model_type='Ridge'
+#model_type='Lasso'
+model_type='WeightLinearRegression'
+#model_type='RidgeCV'
+#model_type='LassoCV'
 
 python prediction.py \
     --use_abundant $use_abundant \

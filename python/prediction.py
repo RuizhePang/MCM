@@ -5,6 +5,8 @@ from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Lasso, LassoCV
+from sklearn.linear_model import Ridge, RidgeCV
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
@@ -129,10 +131,26 @@ elif model_type == 'DecisionTree':
     model = DecisionTreeRegressor(max_depth=10, random_state=random_seed)
 elif model_type == 'LinearRegression':
     model = LinearRegression()
+elif model_type == 'Ridge':
+    model = Ridge(alpha=1.0)
+elif model_type == 'Lasso':
+    model = Lasso(alpha=0.1)
+elif model_type == 'WeightLinearRegression':
+    model = LinearRegression()
+elif model_type == 'RidgeCV':
+    model = RidgeCV(alphas=(np.linspace(0.1,10.0,num=30)),
+                    fit_intercept=True)
+elif model_type == 'LassoCV':
+    model = LassoCV(alphas=(np.linspace(0.01,10.0,num=100)),
+                        fit_intercept=True)
 else:
     raise
     
-model.fit(X_train, y_train)
+if model_type == 'WeightLinearRegression':
+    w = np.exp(-(y_train-50)**2/1000)
+    model.fit(X_train, y_train, sample_weight=w)
+else:
+    model.fit(X_train, y_train)
 
 # Validation
 y_pred = model.predict(X_test)
