@@ -1,25 +1,25 @@
 import pandas as pd
 
-# 加载数据
+# Load data
 match_table = pd.read_csv('./data/match.csv')
 medal_data = pd.read_csv('./data/summerOly_medal_counts.csv')
 athletes_data = pd.read_csv('./data/summerOly_athletes.csv')
 
-# 数据预处理
+# Data preprocessing
 medal_data['NOC'] = medal_data['NOC'].str.strip()
 athletes_data['NOC'] = athletes_data['NOC'].str.strip()
 medal_data['Year'] = pd.to_numeric(medal_data['Year'], errors='coerce')
 athletes_data['Year'] = pd.to_numeric(athletes_data['Year'], errors='coerce')
 
-# change NOC to abbreviation, to filter out the outdated data
+# Change NOC to abbreviation to filter out outdated data
 medal_data = pd.merge(medal_data, match_table, left_on='NOC', right_on='name', how='left')
 medal_data = medal_data[['abbr', 'Year', 'Total', 'Gold', 'Silver', 'Bronze']]
 medal_data = medal_data.rename(columns={'abbr': 'NOC'})
 
-# 按国家和年份排序
+# Sort by country and year
 medal_data_sorted = medal_data.sort_values(by=['NOC', 'Year'], ascending=[True, False])
-# athletes_data_sorted = athletes_data.sort_values(by=['NOC', 'Year'], ascending=[True, False])
 
+# List of Olympic years
 years = [1896, 1900, 1904, 1908, 1912, 1920, 1924, 1928, 1932, 1936, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024]
 
 def filter_conditions(group):
@@ -40,7 +40,7 @@ def filter_conditions(group):
             few_data_indices.append(idx)
     return few_data_indices
 
-# 按国家分组应用筛选条件
+# Apply filtering conditions by country group
 grouped = medal_data_sorted.groupby('NOC', group_keys=False)
 few_data_indices = grouped.apply(filter_conditions).explode().dropna().astype(int)
 few_medal = medal_data_sorted.loc[few_data_indices]
@@ -51,21 +51,21 @@ athletes_data = athletes_data[['Name', 'Year', 'NOC', 'Event', 'Medal']]
 few_athletes = pd.merge(few_medal[['NOC', 'Year']], athletes_data, on=['NOC', 'Year'], how='left')
 abundant_athletes = pd.merge(abundant_medal[['NOC', 'Year']], athletes_data, on=['NOC', 'Year'], how='left')
 
-# 输出结果
-# print("few_data 统计:")
-# print(f"- 国家数量: {few_medal['NOC'].nunique()}")
-# print(f"- 记录数量: {len(few_medal)}")
-# print(f"- 关联运动员数量: {len(few_athletes)}")
+# Output results
+print("Few_data statistics:")
+print(f"- Number of countries: {few_medal['NOC'].nunique()}")
+print(f"- Number of records: {len(few_medal)}")
+print(f"- Number of associated athletes: {len(few_athletes)}")
 
-# print(few_athletes)
-# print(few_medal)
+print(few_athletes)
+print(few_medal)
 
-# print("\nabundant_data 统计:")
-# print(f"- 国家数量: {abundant_medal['NOC'].nunique()}")
-# print(f"- 记录数量: {len(abundant_medal)}")
-# print(f"- 关联运动员数量: {len(abundant_athletes)}")
+print("\nAbundant_data statistics:")
+print(f"- Number of countries: {abundant_medal['NOC'].nunique()}")
+print(f"- Number of records: {len(abundant_medal)}")
+print(f"- Number of associated athletes: {len(abundant_athletes)}")
 
-# 写入 CSV 文件（单个工作表）
+# Write to CSV file (single sheet)
 few_medal['data_type'] = 'few_medal'
 abundant_medal['data_type'] = 'abundant_medal'
 few_athletes['data_type'] = 'few_athletes'
