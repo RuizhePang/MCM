@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import pearsonr
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
 from tqdm import tqdm
 from joblib import Parallel, delayed
 
@@ -12,8 +13,9 @@ from joblib import Parallel, delayed
 def preprocess_data(combined_data_path, prediction_year):
     combined_data = pd.read_csv(combined_data_path)
     combined_data = combined_data.fillna(0)  # Fill NaN with 0
-    few_medal_df = combined_data[combined_data['data_type'] == 'few_medal'].drop(columns=['data_type'])
+    few_medal = combined_data[combined_data['data_type'] == 'few_medal'].drop(columns=['data_type'])
     raw_athletes = combined_data[combined_data['data_type'] == 'raw_athletes'].drop(columns=['data_type'])
+    raw_medal = combined_data[combined_data['data_type'] == 'raw_medal'].drop(columns=['data_type'])
     
     # Calculate participation span
     participation_span = raw_athletes.groupby('Name')['Year'].agg(
@@ -44,7 +46,7 @@ def preprocess_data(combined_data_path, prediction_year):
     raw_athletes['Year'] = prediction_year
 
     # Return data with Medal column
-    return few_medal_df, raw_athletes[['Name', 'NOC', 'Year', 'Event', 'Medal_Score', 'Participation_Span', 'Country_Participants']]
+    return few_medal, raw_athletes[['Name', 'NOC', 'Year', 'Event', 'Medal_Score', 'Participation_Span', 'Country_Participants']], raw_medal
 
 def predict_2028_athletes_num(athletes_data, country):
     country_data = athletes_data[athletes_data['NOC'] == country]
@@ -170,10 +172,12 @@ def evaluate_athletes_by_group(df):
 # ------------------------------
 # Prediction Function
 # ------------------------------
-def predict_nation_medals(few_medal_df, medal_winners_df):
+def predict_nation_medals(few_medal_df, medal_winners_df, year_prediction):
     few_medal_df = few_medal_df.copy()
     
     if medal_winners_df is None or medal_winners_df.empty:
+        few_medal_df['prediction_year'] = year_prediction
+        few_medal_df = few_medal_df.drop_duplicates(subset='NOC', keep='first')
         few_medal_df.loc[:, 'Gold'] = 0
         few_medal_df.loc[:, 'Silver'] = 0
         few_medal_df.loc[:, 'Bronze'] = 0
@@ -187,42 +191,69 @@ def predict_nation_medals(few_medal_df, medal_winners_df):
         Total=lambda x: x.isin(['Gold', 'Silver', 'Bronze']).sum()
     ).reset_index()
     
+    medal_counts['prediction_year'] = year_prediction
+    
     merged_df = few_medal_df.merge(medal_counts, on=['NOC'], how='left').fillna(0)
+    merged_df = merged_df.drop_duplicates(subset='NOC', keep='first')  # 按国家去重
+    
+    merged_df['prediction_year'] = year_prediction
     return merged_df
+
+def evaluate_prediction(model_prediction, raw_medal_df):
+    model_prediction = model_prediction.rename(columns={"prediction_year": "Year"})
+    merged = model_prediction.merge(
+        raw_medal_df,
+        on=["NOC", "Year"],
+        suffixes=("_pred", "_true"),
+        how = "left"
+    ).fillna(0)
+    
+    if merged.empty:
+        raise ValueError("No matching countries between prediction and true data.")
+    
+    y_true = merged[["Gold_true", "Silver_true", "Bronze_true", "Total_true"]].values
+    y_pred = merged[["Gold_pred", "Silver_pred", "Bronze_pred", "Total_pred"]].values
+
+    correlations = []
+    for i in range(y_true.shape[1]):
+        if len(np.unique(y_true[:, i])) > 1 and len(np.unique(y_pred[:, i])) > 1:
+            corr, _ = pearsonr(y_true[:, i], y_pred[:, i])
+            correlations.append(corr)
+        else:
+            correlations.append(np.nan)  
+    
+    mse = mean_squared_error(y_true, y_pred, multioutput="raw_values")
+    r2 = r2_score(y_true, y_pred, multioutput="raw_values")
+    
+    avg_corr = np.nanmean(correlations)
+    
+    return avg_corr, mse, r2
 
 # ------------------------------
 # Main Execution Flow
 # ------------------------------
 if __name__ == "__main__":
     random.seed(233)
-    year = 2028
+    year = 2024
     combined_data_path='./data/clustered_data.csv'
     match_df = pd.read_csv('./data/match.csv')
     
     # Preprocess data
-    few_medal_df, raw_atheletes_df = preprocess_data(combined_data_path, year)
-    
+    few_medal_df, raw_atheletes_df, raw_medal_df = preprocess_data(combined_data_path, year)
+    raw_atheletes_df.fillna(0, inplace=True)
+    raw_medal_df.fillna(0, inplace=True)
+    raw_medal_temp = raw_medal_df.copy()
+
     # Execute evaluation
     medal_winners = evaluate_athletes_by_group(raw_atheletes_df)
-    medal_winners = medal_winners.merge(match_df, left_on='NOC', right_on='abbr', how='left')
-    medal_winners = medal_winners[['Year', 'Event', 'Name', 'name', 'Awarded_Medal']]
-    medal_winners = medal_winners.rename(columns={'name': 'NOC'})
-
-    if medal_winners is not None:
-        print("\nMedal winners by event:")
-        print(medal_winners)
-        medal_winners.to_csv('event_medal_winners.csv', index=False)
-    else:
-        print("No valid medal allocation data found")
-    
-    few_medal_df = few_medal_df.merge(match_df, left_on='NOC', right_on='abbr', how='left')
-    few_medal_df = few_medal_df[['name']]
-    few_medal_df = few_medal_df.rename(columns={'name': 'NOC'})
-
-    print(few_medal_df)
 
     # Load prediction data and execute prediction
-    medal_prediction = predict_nation_medals(few_medal_df[['NOC']], medal_winners)
-    print("\nNational medal prediction (based on model allocation):")
-    print(medal_prediction)
-    medal_prediction.to_csv('predictions_few_data.csv', index=False)
+    medal_prediction = predict_nation_medals(few_medal_df[['NOC']], medal_winners, year)
+    medal_prediction.to_csv(f'predictions_few_data_{year}.csv', index=False)
+
+
+    avg_corr, mse, r2 =  evaluate_prediction(medal_prediction, raw_medal_temp)
+    print(f"\nEvaluation results for year {year}:")
+    print(f"- Average Correlation: {avg_corr:.4f}")
+    print(f"- Mean Squared Error: {mse}")
+    print(f"- R² Score: {r2}")
