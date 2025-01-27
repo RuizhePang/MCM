@@ -12,6 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.metrics import r2_score
 from data_util import *
+from evaluation import *
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
@@ -48,7 +49,8 @@ few_data_indices = grouped.apply(filter_conditions).explode().dropna().astype(in
 few_medal_data = medal_data.loc[few_data_indices]
 abundant_medal_data = medal_data.drop(few_data_indices)
 
-choose_medal_data = abundant_medal_data if use_abundant else few_medal_data
+#choose_medal_data = abundant_medal_data if use_abundant else few_medal_data
+choose_medal_data = medal_data
 
 athletes_data = pd.read_csv('../data/summerOly_athletes.csv')
 athletes_data = pd.merge(athletes_data, match_table, left_on='NOC', right_on='abbr', how='left')
@@ -160,46 +162,55 @@ r2 = r2_score(y_test, y_pred)
 
 #print(f"Test MSE: {mse}")
 #print(f"Test MAE: {mae}")
+combined_data_path = '../data/clustered_data.csv'
+
+few_medal_df, raw_atheletes_df = preprocess_data(combined_data_path, prediction_year)
+
+medal_winners = evaluate_athletes_by_group(raw_atheletes_df)
+medal_winners = medal_winners.merge(match_table, left_on='NOC', right_on='abbr', how='left')
+medal_winners = medal_winners[['Year', 'Event', 'Name', 'name', 'Awarded_Medal']]
+medal_winners = medal_winners.rename(columns={'name': 'NOC'})
+
+few_medal_df = few_medal_df.merge(match_table, left_on='NOC', right_on='abbr', how='left')
+few_medal_df = few_medal_df[['name']]
+few_medal_df = few_medal_df.rename(columns={'name': 'NOC'})
+
+medal_prediction = predict_nation_medals(few_medal_df[['NOC']], medal_winners)
+
 
 errors = []
 choose_medal_data['prediction_result'] = None
 for country, group in choose_medal_data.groupby('NOC'):
-    if country_filter(medal_data, athletes_data, country, prediction_year) == 2:
-        if not save:
-            print('\n')
-            print(f"{country} - may not attend the 2028 Olympic")
-        choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = 'ABSENT'
-        continue
-    elif country_filter(medal_data, athletes_data, country, prediction_year) == 3:
-        if not save:
-            print('\n')
-            print(f"{country} - special case")
-        choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = None
-        continue
-    elif not (use_abundant ^ country_filter(medal_data, athletes_data, country, prediction_year)):
-        continue
+    if not (use_abundant ^ country_filter(medal_data, athletes_data, country, prediction_year)):
+        matching_rows = medal_prediction.loc[medal_prediction['NOC'] == country, medal_type]
+        if not matching_rows.empty:
+            prediction = matching_rows.iloc[0]
+        else:
+            prediction = 0
+        choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = prediction
+        prediction = round(prediction)
+    else:
+        input_medals = [medal_pivot.loc[country, years[-years_back + i]] for i in range(years_back)]
+        input_host = [host_pivot.loc[country, prediction_year]]
+        input_year = [np.float64(prediction_year)]
+        if prediction_year == 2028:
+            input_events = [predict_2028_events_num(events_data)]
+            input_athletes = [predict_2028_athletes_num(athletes_data, country)]
+        else:
+            input_events = [events_pivot.loc[country, prediction_year]]
+            input_athletes = [athletes_pivot.loc[country, prediction_year]]
+        input_data = input_medals + input_athletes + input_host + input_year + input_events
+
+        input_data = np.array(input_data).reshape(1, -1)
+        input_data = scaler.transform(input_data)
+
+        prediction = model.predict(input_data)[0]
+        prediction = round(prediction)
+
+        choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = prediction
 
     if not save:
-        print('\n')
-    input_medals = [medal_pivot.loc[country, years[-years_back + i]] for i in range(years_back)]
-    input_host = [host_pivot.loc[country, prediction_year]]
-    input_year = [np.float64(prediction_year)]
-    if prediction_year == 2028:
-        input_events = [predict_2028_events_num(events_data)]
-        input_athletes = [predict_2028_athletes_num(athletes_data, country)]
-    else:
-        input_events = [events_pivot.loc[country, prediction_year]]
-        input_athletes = [athletes_pivot.loc[country, prediction_year]]
-    input_data = input_medals + input_athletes + input_host + input_year + input_events
-
-    input_data = np.array(input_data).reshape(1, -1)
-    input_data = scaler.transform(input_data)
-
-    prediction = model.predict(input_data)[0]
-    #prediction = round(prediction)
-
-    choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = prediction
-
+        print(f'\n{country}')
     if prediction_year == 2028:
         actual_2024 = medal_pivot.loc[country, 2024]
         if not save:

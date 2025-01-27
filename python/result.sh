@@ -4,9 +4,10 @@ years_back=5
 prediction_year=2028
 medal_type="Total"
 save=1
+random_seed=2028
 
-use_abundant_values=(0 1)
-model_types=("SVM" "RandomForest" "DecisionTree" "LinearRegression")
+use_abundant_values=(1)
+model_types=("SVM" "RandomForest" "DecisionTree" "LinearRegression" "Ridge" "Lasso" "WeightLinearRegression" "RidgeCV" "LassoCV")
 
 for use_abundant in "${use_abundant_values[@]}"; do
   for model_type in "${model_types[@]}"; do
@@ -17,6 +18,7 @@ for use_abundant in "${use_abundant_values[@]}"; do
       --prediction_year $prediction_year \
       --model_type $model_type \
       --medal_type $medal_type \
+      --random_seed $random_seed \
       --save $save
   done
 done
