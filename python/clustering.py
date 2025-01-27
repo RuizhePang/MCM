@@ -1,9 +1,9 @@
 import pandas as pd
 
 # Load data
-match_table = pd.read_csv('./data/match.csv')
-medal_data = pd.read_csv('./data/summerOly_medal_counts.csv')
-athletes_data = pd.read_csv('./data/summerOly_athletes.csv')
+match_table = pd.read_csv('../data/match.csv')
+medal_data = pd.read_csv('../data/summerOly_medal_counts.csv')
+athletes_data = pd.read_csv('../data/summerOly_athletes.csv')
 
 # Data preprocessing
 medal_data['NOC'] = medal_data['NOC'].str.strip()
@@ -20,7 +20,8 @@ medal_data = medal_data.rename(columns={'abbr': 'NOC'})
 medal_data_sorted = medal_data.sort_values(by=['NOC', 'Year'], ascending=[True, False])
 
 # List of Olympic years
-years = [1896, 1900, 1904, 1908, 1912, 1920, 1924, 1928, 1932, 1936, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024]
+#years = [1896, 1900, 1904, 1908, 1912, 1920, 1924, 1928, 1932, 1936, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024]
+years = [1896, 1900, 1904, 1908, 1912, 1920, 1924, 1928, 1932, 1936, 1948, 1952, 1956, 1960, 1964, 1968, 1972, 1976, 1980, 1984, 1988, 1992, 1996, 2000, 2004, 2008, 2012, 2016, 2020]
 
 def filter_conditions(group):
     few_data_indices = []
@@ -74,4 +75,4 @@ medal_data['data_type'] = 'raw_medal'
 athletes_data['data_type'] = 'raw_athletes'
 
 combined_data = pd.concat([few_medal, abundant_medal, few_athletes, abundant_athletes, medal_data, athletes_data], ignore_index=True)
-combined_data.to_csv('./data/clustered_data.csv', index=False)
+combined_data.to_csv('../data/clustered_data.csv', index=False)

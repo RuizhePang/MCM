@@ -2,7 +2,7 @@ use_abundant=1
 years_back=5
 prediction_year=2028
 save=0
-random_seed=2025
+random_seed=2
 
 medal_type='Total'
 #medal_type='Gold'

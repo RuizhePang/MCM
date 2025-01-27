@@ -87,3 +87,15 @@ for year in (2024,):
     y_pred = model.predict(X_test)
     count = (y_pred == y_test).sum()
     print(f"2024 Accuracy: {count}/{len(y_test)}")
+# 在预测2024年时，打印预测获得奖牌的国家
+
+predicted_medal_countries = []
+
+for country, pred in zip(country_set, y_pred):
+    if pred == 1:  # 预测为 1，表示预测该国家会获得奖牌
+        predicted_medal_countries.append(country)
+
+# 打印所有预测会获得奖牌的国家
+print("Predicted countries that will win medals in 2024:")
+for country in predicted_medal_countries:
+    print(country)

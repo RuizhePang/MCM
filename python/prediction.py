@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.metrics import r2_score
+import matplotlib.pyplot as plt
 from data_util import *
 from evaluation import *
 
@@ -118,11 +119,32 @@ for country, group in choose_medal_data.groupby('NOC'):
 X = np.array(X)
 y = np.array(y)
 
-# Normalization
-scaler = StandardScaler()
-X = scaler.fit_transform(X)
+noise_factor = 0.1
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_seed)
+historical_medal_noise = 1 + np.random.normal(0, noise_factor, X[:, :years_back].shape)
+athletes_noise = 1 + np.random.normal(0, noise_factor, X[:, years_back].shape)  
+events_noise = 1 + np.random.normal(0, noise_factor, X[:, years_back + 3].shape)  
+
+X_historical_medal_noise = X[:, :years_back].astype(np.float64) * historical_medal_noise
+X_athletes_noise = X[:, years_back].astype(np.float64) * athletes_noise
+X_events_noise = X[:, years_back + 3].astype(np.float64) * events_noise
+
+X_with_noise_historical = np.hstack([X_historical_medal_noise, X[:, years_back:]])
+X_with_noise_athletes = np.hstack([X[:, :years_back], X_athletes_noise.reshape(-1, 1), X[:, years_back+1:]])
+X_with_noise_events = np.hstack([X[:, :years_back+3], X_events_noise.reshape(-1, 1), X[:, years_back+4:]])
+
+scaler = StandardScaler()
+
+X_original_scaled = scaler.fit_transform(X)
+
+X_with_noise_historical_scaled = scaler.fit_transform(X_with_noise_historical)
+X_with_noise_athletes_scaled = scaler.fit_transform(X_with_noise_athletes)
+X_with_noise_events_scaled = scaler.fit_transform(X_with_noise_events)
+
+X_train, X_test, y_train, y_test = train_test_split(X_original_scaled, y, test_size=0.2, random_state=random_seed)
+X_train_noise_historical, X_test_noise_historical, y_train_noise_historical, y_test_noise_historical = train_test_split(X_with_noise_historical_scaled, y, test_size=0.2, random_state=random_seed)
+X_train_noise_athletes, X_test_noise_athletes, y_train_noise_athletes, y_test_noise_athletes = train_test_split(X_with_noise_athletes_scaled, y, test_size=0.2, random_state=random_seed)
+X_train_noise_events, X_test_noise_events, y_train_noise_events, y_test_noise_events = train_test_split(X_with_noise_events_scaled, y, test_size=0.2, random_state=random_seed)
 
 # Model Defination
 if model_type == 'SVM':
@@ -149,10 +171,31 @@ else:
     raise
     
 if model_type == 'WeightLinearRegression':
-    w = np.exp(-(y_train-50)**2/1000)
+    w = np.exp(-(y_train-50)**2/2000)
     model.fit(X_train, y_train, sample_weight=w)
 else:
     model.fit(X_train, y_train)
+    y_pred_original = model.predict(X_test)
+
+    model.fit(X_train_noise_historical, y_train_noise_historical)
+    y_pred_noise_historical = model.predict(X_test_noise_historical)
+
+    model.fit(X_train_noise_athletes, y_train_noise_athletes)
+    y_pred_noise_athletes = model.predict(X_test_noise_athletes)
+
+    model.fit(X_train_noise_events, y_train_noise_events)
+    y_pred_noise_events = model.predict(X_test_noise_events)
+
+    plt.figure(figsize=(8, 6))
+    plt.scatter(y_pred_original, y_pred_noise_historical, color='red', label='Noisy Historical Medal Data')
+    plt.scatter(y_pred_original, y_pred_noise_athletes, color='green', label='Noisy Athletes Data')
+    plt.scatter(y_pred_original, y_pred_noise_events, color='blue', label='Noisy Events Data')
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], color='black', linestyle='--')
+    plt.title("Predictions Comparison: Original vs Noisy Data")
+    plt.xlabel("Predicted Medal Counts (Original Data)")
+    plt.ylabel("Predicted Medal Counts (Noisy Data)")
+    plt.legend()
+    plt.show()
 
 # Validation
 y_pred = model.predict(X_test)
@@ -177,19 +220,14 @@ few_medal_df = few_medal_df.rename(columns={'name': 'NOC'})
 
 medal_prediction = predict_nation_medals(few_medal_df[['NOC']], medal_winners)
 
-
-errors = []
+actuals = []
+predictions = []
 choose_medal_data['prediction_result'] = None
 for country, group in choose_medal_data.groupby('NOC'):
-    if not (use_abundant ^ country_filter(medal_data, athletes_data, country, prediction_year)):
-        matching_rows = medal_prediction.loc[medal_prediction['NOC'] == country, medal_type]
-        if not matching_rows.empty:
-            prediction = matching_rows.iloc[0]
-        else:
-            prediction = 0
-        choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = prediction
-        prediction = round(prediction)
-    else:
+    if country_filter(medal_data, athletes_data, country, prediction_year) == 2:
+        prediction = 'ABSENT'
+
+    elif use_abundant ^ country_filter(medal_data, athletes_data, country, prediction_year):
         input_medals = [medal_pivot.loc[country, years[-years_back + i]] for i in range(years_back)]
         input_host = [host_pivot.loc[country, prediction_year]]
         input_year = [np.float64(prediction_year)]
@@ -205,9 +243,16 @@ for country, group in choose_medal_data.groupby('NOC'):
         input_data = scaler.transform(input_data)
 
         prediction = model.predict(input_data)[0]
+    else: 
+        matching_rows = medal_prediction.loc[medal_prediction['NOC'] == country, medal_type]
+        if not matching_rows.empty:
+            prediction = matching_rows.iloc[0]
+        else:
+            prediction = 0
+    
+    if prediction != 'ABSENT':
         prediction = round(prediction)
-
-        choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = prediction
+    choose_medal_data.loc[choose_medal_data['NOC'] == country, 'prediction_result'] = prediction
 
     if not save:
         print(f'\n{country}')
@@ -221,13 +266,27 @@ for country, group in choose_medal_data.groupby('NOC'):
         print(f"{country} - Actual 2024 {medal_type} medal number: ", actual)
         print(f"{country} - Predicted 2024 {medal_type} medal number: ", prediction)
 
-        error = (actual - prediction) ** 2
-        errors.append(error)
+        if prediction != 'ABSENT':
+            predictions.append(prediction)
+            actuals.append(actual)
 
 if prediction_year != 2028:
-    print(f'MSE: {mse}')
-    print(f'MAE: {mae}')
-    print(f'R^2: {r2}')
+    actuals = np.array(actuals)
+    predictions = np.array(predictions)
+    plt.figure(figsize=(8, 6))
+    plt.scatter(actuals, predictions, color='blue', label='Predicted vs Actual')
+    plt.plot([actuals.min(), actuals.max()], [actuals.min(), actuals.max()], color='red', linestyle='--', label="y = x")
+
+    plt.title("Actual vs Predicted Values")
+    plt.xlabel("Actual Values")
+    plt.ylabel("Predicted Values")
+
+    plt.legend()
+
+    plt.show()
+    #print(f'MSE: {mse}')
+    #print(f'MAE: {mae}')
+    #print(f'R^2: {r2}')
 elif save:
     import openpyxl
     import os
