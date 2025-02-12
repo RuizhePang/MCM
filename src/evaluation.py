@@ -6,6 +6,78 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 from tqdm import tqdm
 from joblib import Parallel, delayed
+import matplotlib.pyplot as plt
+import seaborn as sns
+# ------------------------------
+# Visualization Functions
+# ------------------------------
+def plot_criteria_distribution(df):
+    """Plot distribution of criteria (Medal_Score, Participation_Span, Country_Participants)"""
+    plt.figure(figsize=(12, 6))
+    plt.suptitle("Distribution of Criteria", fontsize=16)
+    
+    plt.subplot(1, 3, 1)
+    sns.histplot(df['Medal_Score'], kde=True, color='blue')
+    plt.title("Medal Score Distribution")
+    
+    plt.subplot(1, 3, 2)
+    sns.histplot(df['Participation_Span'], kde=True, color='green')
+    plt.title("Participation Span Distribution")
+    
+    plt.subplot(1, 3, 3)
+    sns.histplot(df['Country_Participants'], kde=True, color='orange')
+    plt.title("Country Participants Distribution")
+    
+    plt.tight_layout()
+    plt.savefig('criteria_distribution.png')  # Save as image
+    plt.close()
+
+def plot_critic_weights(weights, criteria_names):
+    """Plot CRITIC weights for each criterion"""
+    plt.figure(figsize=(16, 10))
+    sns.barplot(x=criteria_names, y=weights, palette='viridis')
+    plt.title("CRITIC Weights for Criteria")
+    plt.ylabel("Weight")
+    plt.xlabel("Criteria")
+    plt.xticks(rotation=45)
+    plt.savefig('critic_weights.png')  # Save as image
+    plt.close()
+
+def plot_topsis_scores(scores):
+    """Plot distribution of TOPSIS scores"""
+    plt.figure(figsize=(8, 5))
+    sns.histplot(scores, kde=True, color='purple')
+    plt.title("Distribution of TOPSIS Scores")
+    plt.xlabel("TOPSIS Score")
+    plt.ylabel("Frequency")
+    plt.savefig('topsis_scores.png')  # Save as image
+    plt.close()
+
+def plot_prediction_vs_actual(medal_prediction, raw_medal_df):
+    """Plot predicted vs actual medal counts"""
+    merged = medal_prediction.merge(
+        raw_medal_df,
+        on=["NOC", "Year"],
+        suffixes=("_pred", "_true"),
+        how="left"
+    ).fillna(0)
+    
+    plt.figure(figsize=(12, 6))
+    plt.suptitle("Predicted vs Actual Medal Counts", fontsize=16)
+    
+    medals = ['Gold', 'Silver', 'Bronze']
+    for i, medal in enumerate(medals):
+        plt.subplot(1, 3, i+1)
+        sns.scatterplot(x=f"{medal}_true", y=f"{medal}_pred", data=merged, color='blue')
+        plt.plot([0, merged[f"{medal}_true"].max()], [0, merged[f"{medal}_true"].max()], 'r--')
+        plt.title(f"{medal} Medals")
+        plt.xlabel("Actual")
+        plt.ylabel("Predicted")
+    
+    plt.tight_layout()
+    plt.savefig('prediction_vs_actual.png')  # Save as image
+    plt.close()
+
 
 # ------------------------------
 # Data Preprocessing
@@ -200,7 +272,6 @@ def predict_nation_medals(few_medal_df, medal_winners_df, year_prediction):
     return merged_df
 
 def evaluate_prediction(model_prediction, raw_medal_df):
-    model_prediction = model_prediction.rename(columns={"prediction_year": "Year"})
     merged = model_prediction.merge(
         raw_medal_df,
         on=["NOC", "Year"],
@@ -235,24 +306,41 @@ def evaluate_prediction(model_prediction, raw_medal_df):
 if __name__ == "__main__":
     random.seed(233)
     year = 2024
-    combined_data_path='./data/clustered_data.csv'
+    combined_data_path = './data/clustered_data.csv'
     match_df = pd.read_csv('./data/match.csv')
     
     # Preprocess data
-    few_medal_df, raw_atheletes_df, raw_medal_df = preprocess_data(combined_data_path, year)
-    raw_atheletes_df.fillna(0, inplace=True)
+    few_medal_df, raw_athletes_df, raw_medal_df = preprocess_data(combined_data_path, year)
+    raw_athletes_df.fillna(0, inplace=True)
     raw_medal_df.fillna(0, inplace=True)
     raw_medal_temp = raw_medal_df.copy()
 
+    # Plot criteria distribution
+    plot_criteria_distribution(raw_athletes_df)
+
     # Execute evaluation
-    medal_winners = evaluate_athletes_by_group(raw_atheletes_df)
+    medal_winners = evaluate_athletes_by_group(raw_athletes_df)
+
+    # Plot CRITIC weights (example for one group)
+    example_group = raw_athletes_df.groupby('Event').get_group(list(raw_athletes_df['Event'].unique())[0])
+    weights = critic_weight(example_group[['Medal_Score', 'Participation_Span', 'Country_Participants']].values)
+    plot_critic_weights(weights, ['Medal_Score', 'Participation_Span', 'Country_Participants'])
+
+    # Plot TOPSIS scores (example for one group)
+    example_scores = topsis(example_group[['Medal_Score', 'Participation_Span', 'Country_Participants']].values, weights)
+    plot_topsis_scores(example_scores)
 
     # Load prediction data and execute prediction
     medal_prediction = predict_nation_medals(few_medal_df[['NOC']], medal_winners, year)
     medal_prediction.to_csv(f'predictions_few_data_{year}.csv', index=False)
 
 
-    avg_corr, mse, r2 =  evaluate_prediction(medal_prediction, raw_medal_temp)
+    medal_prediction = medal_prediction.rename(columns={"prediction_year": "Year"})
+    # Plot predicted vs actual medal counts
+    plot_prediction_vs_actual(medal_prediction, raw_medal_temp)
+
+    # Evaluate prediction
+    avg_corr, mse, r2 = evaluate_prediction(medal_prediction, raw_medal_temp)
     print(f"\nEvaluation results for year {year}:")
     print(f"- Average Correlation: {avg_corr:.4f}")
     print(f"- Mean Squared Error: {mse}")
